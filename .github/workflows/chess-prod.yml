@@ -1,0 +1,39 @@
+name: chess-prod
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-production:
+    runs-on: [self-hosted, mac-mini, vibecoding]
+    defaults:
+      run:
+        working-directory: vibecoding/chess
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: vibecoding/chess/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy production
+        env:
+          APP_NAME: chess
+          DIST_DIR: ${{ github.workspace }}/vibecoding/chess/dist
+        run: bash ${{ github.workspace }}/scripts/vibecoding/deploy-prod.sh

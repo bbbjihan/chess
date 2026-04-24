@@ -1,0 +1,17 @@
+# Example Caddyfile snippets for chess.jihan.kr
+
+chess.jihan.kr {
+    root * /opt/vibecoding/chess/prod/current
+    encode gzip zstd
+    file_server
+    try_files {path} /index.html
+}
+
+# Preview sites are generated per PR by deploy-preview.sh
+# Example generated block:
+# pr-23.chess.jihan.kr {
+#     root * /opt/vibecoding/chess/previews/pr-23
+#     encode gzip zstd
+#     file_server
+#     try_files {path} /index.html
+# }

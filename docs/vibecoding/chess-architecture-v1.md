@@ -50,23 +50,21 @@ Cloudflare에서 다음 레코드를 준비한다.
 ```text
 /opt/vibecoding/
   chess/
-    repo/                     # 선택: runner가 checkout/workspace로 사용할 기준 위치
     prod/
       releases/
         20260423-173500/
       current -> /opt/vibecoding/chess/prod/releases/20260423-173500
     previews/
+      pr-1/
       pr-23/
       pr-24/
     artifacts/
-      pr-23.tgz
-      prod-20260423-173500.tgz
     logs/
 ```
 
 ## Caddy 구조
 
-Caddy는 host 기준으로 production/preview를 라우팅한다.
+Caddy는 **한 번만 설정**하고, 이후 Actions는 `/opt/vibecoding` 아래 파일만 갱신한다.
 
 ### Production
 - `chess.jihan.kr` -> `/opt/vibecoding/chess/prod/current`
@@ -74,17 +72,13 @@ Caddy는 host 기준으로 production/preview를 라우팅한다.
 ### Preview
 - `pr-23.chess.jihan.kr` -> `/opt/vibecoding/chess/previews/pr-23`
 
-방법은 두 가지가 있다.
+권장 방식은 **와일드카드 preview host를 한 번만 설정**하는 것이다.
+즉, Caddy는 `*.chess.jihan.kr`을 받아서 `pr-<n>` 형태의 host를 preview 디렉터리로 매핑한다.
 
-1. **정적 개별 사이트 블록 생성**
-   - PR마다 Caddy 설정 파일 생성/삭제
-   - 직관적이지만 관리 파일 수가 늘어남
-
-2. **와일드카드 + 동적 root 매핑**
-   - host에서 `pr-번호`를 파싱해 디렉터리로 매핑
-   - 더 우아하지만 Caddy 설정이 약간 더 정교해야 함
-
-v1에서는 운영 단순성을 위해 **개별 설정 파일 생성 방식**을 추천한다.
+이 구조의 장점:
+- PR마다 Caddy 설정을 수정할 필요 없음
+- GitHub runner는 시스템 설정 파일을 건드리지 않음
+- runner는 `/opt/vibecoding` 아래 정적 파일만 배포
 
 ## GitHub Actions 흐름
 
@@ -92,14 +86,10 @@ v1에서는 운영 단순성을 위해 **개별 설정 파일 생성 방식**을
 - 의존성 설치
 - Vite build
 - 결과물을 `/opt/vibecoding/chess/previews/pr-<n>`에 배포
-- 필요 시 Caddy preview site config 생성
-- Caddy reload
 - PR comment에 preview URL 기록
 
 ### 2) PR closed
 - `/opt/vibecoding/chess/previews/pr-<n>` 삭제
-- preview용 Caddy config 제거
-- Caddy reload
 
 ### 3) push to main
 - 의존성 설치
@@ -107,7 +97,13 @@ v1에서는 운영 단순성을 위해 **개별 설정 파일 생성 방식**을
 - timestamp release 디렉터리 생성
 - 빌드 결과물 업로드
 - `prod/current` 심볼릭 링크 교체
-- Caddy reload는 보통 불필요하나 정책상 포함 가능
+
+## Public repo 안전 규칙
+
+- fork PR은 self-hosted runner에서 배포하지 않음
+- fork PR은 GitHub-hosted runner에서 build만 수행
+- same-repo PR만 self-hosted preview deploy 허용
+- production deploy는 `main` push 또는 수동 실행만 허용
 
 ## Git 브랜치 규칙
 
@@ -143,13 +139,14 @@ v1에서는 운영 단순성을 위해 **개별 설정 파일 생성 방식**을
 - production release 방식: timestamp release + symlink 전환
 - preview cleanup: PR close 시 자동 삭제
 - runner 위치: Mac mini 로컬 설치
+- Caddy 변경: 1회 수동 설정
 
 ## 실제 구축 순서
 
 1. chess repo 생성
 2. React + Vite + pnpm 초기화
 3. Mac mini에 `/opt/vibecoding/chess` 구조 준비
-4. Caddy 설치 및 production site 설정
+4. Caddy 설치 및 production/preview host 설정
 5. Cloudflare DNS에 `chess.jihan.kr`, `*.chess.jihan.kr` 연결
 6. GitHub self-hosted runner 연결
 7. main deploy workflow 작성

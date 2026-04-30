@@ -1,4 +1,17 @@
 # Example Caddyfile snippets for chess.jihan.kr
+#
+# Production is served from:
+#   /opt/vibecoding/chess/prod/current
+#
+# Preview builds are written by GitHub Actions to:
+#   /opt/vibecoding/chess/previews/pr-<number>
+#
+# In v1, Caddy is configured once and Actions only update files under /opt/vibecoding.
+
+{
+    # Replace with a real contact email before production use.
+    email you@example.com
+}
 
 chess.jihan.kr {
     root * /opt/vibecoding/chess/prod/current
@@ -7,11 +20,14 @@ chess.jihan.kr {
     try_files {path} /index.html
 }
 
-# Preview sites are generated per PR by deploy-preview.sh
-# Example generated block:
-# pr-23.chess.jihan.kr {
-#     root * /opt/vibecoding/chess/previews/pr-23
-#     encode gzip zstd
-#     file_server
-#     try_files {path} /index.html
-# }
+*.chess.jihan.kr {
+    @preview host_regexp preview ^pr-(\d+)\.chess\.jihan\.kr$
+    handle @preview {
+        root * /opt/vibecoding/chess/previews/{re.preview.1}
+        encode gzip zstd
+        file_server
+        try_files {path} /index.html
+    }
+
+    respond "Preview not found" 404
+}

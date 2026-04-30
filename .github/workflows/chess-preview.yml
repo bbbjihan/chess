@@ -4,40 +4,58 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  deploy-preview:
-    if: github.event.action != 'closed'
-    runs-on: [self-hosted, mac-mini, vibecoding]
-    defaults:
-      run:
-        working-directory: vibecoding/chess
+  external-pr-check:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
     steps:
+      - name: Explain skip for fork PR
+        run: |
+          echo "Fork PR detected. Self-hosted preview deploy is intentionally skipped."
+
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: vibecoding/chess/pnpm-lock.yaml
+          cache: npm
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
+
+  deploy-preview:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mac-mini, vibecoding]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Deploy preview
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           APP_NAME: chess
-          DIST_DIR: ${{ github.workspace }}/vibecoding/chess/dist
+          DIST_DIR: ${{ github.workspace }}/dist
         run: bash ${{ github.workspace }}/scripts/vibecoding/deploy-preview.sh
 
       - name: Comment preview URL
@@ -46,7 +64,7 @@ jobs:
           script: |
             const pr = context.payload.pull_request.number;
             const body = `Preview ready: https://pr-${pr}.chess.jihan.kr`;
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr,
@@ -54,7 +72,7 @@ jobs:
             });
 
   cleanup-preview:
-    if: github.event.action == 'closed'
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mac-mini, vibecoding]
     steps:
       - name: Checkout

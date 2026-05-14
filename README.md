@@ -1,6 +1,22 @@
-# React + Vite
+# Chess
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite chess app deployed to `chess.jihan.kr` through the self-hosted vibe-coding pipeline.
+
+## Vibe-coding workflow
+
+Feature work requested from Discord should use a thread-scoped Hermes/Codex session:
+
+1. Create or reuse a thread session with `scripts/vibecoding/thread_session.py init`.
+2. Run Codex only inside the generated worktree under `/opt/vibecoding/chess/worktrees/thread-<id>`.
+3. Ask for product/scope/destructive-operation decisions in the same Discord thread before proceeding.
+4. Verify with `pnpm test` and `pnpm build`.
+5. Open a PR and provide `https://pr-<number>.chess.jihan.kr` as the preview URL.
+
+See [`docs/vibecoding/thread-codex-workflow.md`](docs/vibecoding/thread-codex-workflow.md) for the full operating procedure.
+
+## React + Vite
+
+This app uses a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
 

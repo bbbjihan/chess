@@ -114,13 +114,17 @@ Caddy의 메인 설정은 `/opt/vibecoding/chess/caddy/previews/*.caddy`를 impo
 
 ## GitHub 운영 규칙
 
-- Discord 요청 -> issue 생성
-- issue -> branch
+- Discord 요청 -> Hermes thread session 생성
+- Hermes thread session -> 스레드 전용 branch/worktree 생성
+- Hermes -> Codex를 해당 worktree 안에서만 실행
+- Codex 작업 중 구체화/의사결정/확정이 필요한 항목은 Discord 스레드에서 확인
 - branch -> PR
 - PR -> preview URL 자동 생성
 - 사용자 확인 후 승인
 - 승인된 PR만 `main` merge
 - `main` merge 후 production 자동 반영
+
+자세한 운영 절차는 [`thread-codex-workflow.md`](./thread-codex-workflow.md)를 기준으로 한다.
 
 ## 보안 / 운영 메모
 

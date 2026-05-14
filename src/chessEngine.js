@@ -47,7 +47,7 @@ export function cloneState(state) {
 
 export function getLegalMoves(state, from) {
   const piece = getPiece(state.board, from)
-  if (!piece || piece.color !== state.turn || state.status !== 'active') return []
+  if (!piece || piece.color !== state.turn || isGameComplete(state.status)) return []
 
   return getPseudoLegalMoves(state.board, from).filter((to) => {
     const nextBoard = moveOnBoard(state.board, from, to)
@@ -56,7 +56,7 @@ export function getLegalMoves(state, from) {
 }
 
 export function makeMove(state, from, to) {
-  if (state.status !== 'active') {
+  if (isGameComplete(state.status)) {
     throw new Error('Game is already complete')
   }
 
@@ -271,6 +271,10 @@ function hasAnyLegalMove(state, color) {
   }
 
   return false
+}
+
+function isGameComplete(status) {
+  return status === 'checkmate' || status === 'stalemate'
 }
 
 function containsCoord(coords, target) {

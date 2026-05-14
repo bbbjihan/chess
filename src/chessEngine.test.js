@@ -48,6 +48,28 @@ describe('chess engine', () => {
     expect(() => makeMove(state, squareToCoords('e7'), squareToCoords('d7'))).toThrow(/check/i)
   })
 
+  it('allows a checked player to make a legal move that escapes check', () => {
+    const state = {
+      ...createInitialState(),
+      board: Array.from({ length: 8 }, () => Array(8).fill(null)),
+      turn: 'black',
+      status: 'check',
+    }
+    state.board[squareToCoords('e8').row][squareToCoords('e8').col] = { type: 'king', color: 'black' }
+    state.board[squareToCoords('a1').row][squareToCoords('a1').col] = { type: 'king', color: 'white' }
+    state.board[squareToCoords('e1').row][squareToCoords('e1').col] = { type: 'rook', color: 'white' }
+    state.board[squareToCoords('a7').row][squareToCoords('a7').col] = { type: 'rook', color: 'black' }
+
+    expect(getLegalMoves(state, squareToCoords('a7'))).toEqual(
+      expect.arrayContaining([squareToCoords('e7')]),
+    )
+
+    const next = makeMove(state, squareToCoords('a7'), squareToCoords('e7'))
+
+    expect(next.status).toBe('active')
+    expect(next.turn).toBe('white')
+  })
+
   it('detects checkmate with scholar mate', () => {
     const state = createInitialState()
     const moves = [

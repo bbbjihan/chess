@@ -59,15 +59,15 @@
 ## 8. Preview 배포 자동화
 - [ ] `pull_request` workflow 작성
 - [ ] PR 번호 기반 preview path 생성
-- [ ] preview Caddy config 생성
-- [ ] Caddy reload
+- [ ] PR별 explicit Caddy snippet 생성
+- [ ] Caddy validate/reload
 - [ ] preview URL PR comment 기록
 
 ## 9. Preview cleanup 자동화
 - [ ] `pull_request.closed` 처리
 - [ ] preview directory 삭제
-- [ ] preview config 삭제
-- [ ] Caddy reload
+- [ ] PR별 Caddy snippet 삭제
+- [ ] Caddy validate/reload
 
 ## 10. 운영 프로세스 정리
 - [ ] Discord 요청 템플릿 정리

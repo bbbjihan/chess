@@ -72,13 +72,14 @@ Caddy는 **한 번만 설정**하고, 이후 Actions는 `/opt/vibecoding` 아래
 ### Preview
 - `pr-23.chess.jihan.kr` -> `/opt/vibecoding/chess/previews/pr-23`
 
-권장 방식은 **와일드카드 preview host를 한 번만 설정**하는 것이다.
-즉, Caddy는 `*.chess.jihan.kr`을 받아서 `pr-<n>` 형태의 host를 preview 디렉터리로 매핑한다.
+v1에서는 **PR마다 명시적 Caddy snippet을 생성**한다.
+Caddy의 메인 설정은 `/opt/vibecoding/chess/caddy/previews/*.caddy`를 import하고, GitHub Actions가 PR별 snippet을 생성/삭제한 뒤 Caddy를 reload한다.
 
 이 구조의 장점:
-- PR마다 Caddy 설정을 수정할 필요 없음
-- GitHub runner는 시스템 설정 파일을 건드리지 않음
-- runner는 `/opt/vibecoding` 아래 정적 파일만 배포
+- wildcard 인증서가 필요 없음
+- 각 preview host가 일반 ACME HTTP/TLS-ALPN challenge로 인증서 발급 가능
+- GitHub runner는 `/opt/vibecoding/chess/caddy/previews` 아래 snippet만 조작
+- preview cleanup 시 snippet과 정적 파일을 함께 정리
 
 ## GitHub Actions 흐름
 

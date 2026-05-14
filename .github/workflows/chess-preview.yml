@@ -20,17 +20,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set Corepack cache
+        run: |
+          mkdir -p "$HOME/.local/share/corepack"
+          echo "COREPACK_HOME=$HOME/.local/share/corepack" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+          run_install: false
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm build
 
   deploy-preview:
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
@@ -39,17 +50,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set Corepack cache
+        run: |
+          mkdir -p "$HOME/.local/share/corepack"
+          echo "COREPACK_HOME=$HOME/.local/share/corepack" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+          run_install: false
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm build
 
       - name: Deploy preview
         env:

@@ -2,6 +2,17 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Supabase OAuth
+
+Copy `.env.example` to `.env.local` and set:
+
+```sh
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+In Supabase Auth, enable Google as an OAuth provider and add your local or preview app URL to the allowed redirect URLs. The app uses those values to start Google OAuth, fetch the signed-in user's name/email/avatar, and sign out.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

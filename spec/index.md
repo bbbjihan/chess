@@ -10,6 +10,7 @@ This directory is the source of truth for repository specs. Read this index firs
 ## Product and feature specs
 
 - [`features/chess-game.md`](features/chess-game.md) — current user-facing chess game behavior.
+- [`features/computer-opponent.md`](features/computer-opponent.md) — browser-side Stockfish computer opponent behavior and fallback states.
 - [`features/chess-engine.md`](features/chess-engine.md) — chess rules engine behavior and testing focus.
 - [`operations/vibecoding-deployments.md`](operations/vibecoding-deployments.md) — deployment and preview behavior for vibe-coding workflows.
 

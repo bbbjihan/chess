@@ -11,6 +11,7 @@ This directory is the source of truth for repository specs. Read this index firs
 
 - [`features/chess-game.md`](features/chess-game.md) — current user-facing chess game behavior.
 - [`features/chess-engine.md`](features/chess-engine.md) — chess rules engine behavior and testing focus.
+- [`features/local-records-rating.md`](features/local-records-rating.md) — local-browser game records, recent matches, Elo ratings, and profile stats.
 - [`operations/vibecoding-deployments.md`](operations/vibecoding-deployments.md) — deployment and preview behavior for vibe-coding workflows.
 
 ## How to maintain this index

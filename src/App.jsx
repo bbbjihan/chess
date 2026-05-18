@@ -1,6 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { createInitialState, coordsToSquare, getLegalMoves, makeMove } from './chessEngine.js'
+import {
+  clearStoredRecords,
+  loadRecords,
+  recordCompletedGame,
+  saveRecords,
+} from './localRecords.js'
 
 const PIECES = {
   white: {
@@ -32,8 +38,10 @@ const PIECE_NAMES = {
 
 function App() {
   const [game, setGame] = useState(() => createInitialState())
+  const [records, setRecords] = useState(() => loadRecords())
   const [selected, setSelected] = useState(null)
   const [message, setMessage] = useState('White to move. Choose a piece to begin.')
+  const recordedGameRef = useRef(null)
 
   const legalMoves = useMemo(
     () => (selected ? getLegalMoves(game, selected) : []),
@@ -41,6 +49,25 @@ function App() {
   )
 
   const statusText = getStatusText(game)
+  const recentGames = records.recentGames
+
+  useEffect(() => {
+    if (game.status !== 'checkmate' && game.status !== 'stalemate') {
+      recordedGameRef.current = null
+      return
+    }
+
+    const finalNotation = game.history.at(-1)?.notation ?? 'none'
+    const completionKey = `${game.status}:${game.winner ?? 'draw'}:${game.history.length}:${finalNotation}`
+    if (recordedGameRef.current === completionKey) return
+
+    setRecords((current) => {
+      const nextRecords = recordCompletedGame(current, game)
+      saveRecords(nextRecords)
+      return nextRecords
+    })
+    recordedGameRef.current = completionKey
+  }, [game])
 
   function handleSquareClick(row, col) {
     const target = { row, col }
@@ -81,7 +108,13 @@ function App() {
   function resetGame() {
     setGame(createInitialState())
     setSelected(null)
+    recordedGameRef.current = null
     setMessage('New game started. White to move.')
+  }
+
+  function clearRecords() {
+    const nextRecords = clearStoredRecords()
+    setRecords(nextRecords)
   }
 
   return (
@@ -173,9 +206,74 @@ function App() {
             </div>
           </div>
 
+          <div className="records-section" aria-label="Local profile records">
+            <div className="section-heading">
+              <p className="panel-label">프로필 기록</p>
+              <button className="text-button" onClick={clearRecords} type="button">
+                기록 초기화
+              </button>
+            </div>
+            <div className="profile-grid">
+              {(['white', 'black']).map((color) => {
+                const profile = records.profiles[color]
+
+                return (
+                  <article className="profile-card" key={color}>
+                    <div className="profile-card-header">
+                      <span className={`turn-dot ${color}`} />
+                      <div>
+                        <h3>{profile.name}</h3>
+                        <strong>{profile.rating}</strong>
+                      </div>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>전적</dt>
+                        <dd>{profile.wins}W {profile.losses}L {profile.draws}D</dd>
+                      </div>
+                      <div>
+                        <dt>게임</dt>
+                        <dd>{profile.games}</dd>
+                      </div>
+                      <div>
+                        <dt>체크메이트</dt>
+                        <dd>{profile.checkmates}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+
           <button className="reset-button" onClick={resetGame} type="button">
             새 게임 시작
           </button>
+
+          <div className="recent-games">
+            <p className="panel-label">최근 대국</p>
+            {recentGames.length === 0 ? (
+              <p className="empty-history">저장된 완료 대국이 없습니다.</p>
+            ) : (
+              <ol>
+                {recentGames.map((recentGame) => (
+                  <li key={recentGame.id}>
+                    <div>
+                      <strong>{formatRecentResult(recentGame)}</strong>
+                      <span>{formatGameDate(recentGame.completedAt)}</span>
+                    </div>
+                    <p>
+                      {recentGame.moveCount} moves
+                      {recentGame.finalNotation ? ` · ${recentGame.finalNotation}` : ''}
+                    </p>
+                    <em>
+                      W {formatRatingDelta(recentGame.ratings.white)} · B {formatRatingDelta(recentGame.ratings.black)}
+                    </em>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
 
           <div className="move-list">
             <p className="panel-label">기보</p>
@@ -215,6 +313,26 @@ function buildMoveMessage(game) {
 
 function formatCaptured(captured) {
   return captured.length ? captured.map((piece) => PIECE_NAMES[piece]).join(', ') : '—'
+}
+
+function formatRecentResult(game) {
+  if (game.result === 'draw') return 'Draw by stalemate'
+  return `${capitalize(game.result)} won by checkmate`
+}
+
+function formatGameDate(completedAt) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(completedAt))
+}
+
+function formatRatingDelta({ before, after }) {
+  const delta = after - before
+  const sign = delta > 0 ? '+' : ''
+  return `${after} (${sign}${delta})`
 }
 
 function sameSquare(a, b) {

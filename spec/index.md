@@ -11,6 +11,7 @@ This directory is the source of truth for repository specs. Read this index firs
 
 - [`features/chess-game.md`](features/chess-game.md) — current user-facing chess game behavior.
 - [`features/chess-engine.md`](features/chess-engine.md) — chess rules engine behavior and testing focus.
+- [`features/online-realtime.md`](features/online-realtime.md) — Supabase Realtime invite-link 1:1 online game MVP behavior.
 - [`operations/vibecoding-deployments.md`](operations/vibecoding-deployments.md) — deployment and preview behavior for vibe-coding workflows.
 
 ## How to maintain this index

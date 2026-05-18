@@ -13,6 +13,7 @@ The app supports Supabase OAuth authentication with Google as the first provider
 - Show a logout control while authenticated and clear local session state after logout.
 - Keep the chess board playable whether the user is signed in or signed out.
 - If Supabase environment variables are missing, keep the game usable and show a concise configuration message instead of a broken OAuth button.
+- Persist OAuth callback sessions in browser storage when available, discard malformed stored session JSON, and tolerate non-browser contexts where storage is unavailable.
 
 ## Configuration expectations
 

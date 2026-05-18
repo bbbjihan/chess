@@ -36,7 +36,13 @@ export function extractSessionFromUrl(urlString) {
   }
 }
 
-export function readStoredSession(storage = window.localStorage) {
+function getDefaultStorage() {
+  return typeof window === 'undefined' ? null : window.localStorage
+}
+
+export function readStoredSession(storage = getDefaultStorage()) {
+  if (!storage) return null
+
   const value = storage.getItem(AUTH_STORAGE_KEY)
   if (!value) return null
 
@@ -48,11 +54,15 @@ export function readStoredSession(storage = window.localStorage) {
   }
 }
 
-export function storeSession(session, storage = window.localStorage) {
+export function storeSession(session, storage = getDefaultStorage()) {
+  if (!storage) return
+
   storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
 }
 
-export function clearStoredSession(storage = window.localStorage) {
+export function clearStoredSession(storage = getDefaultStorage()) {
+  if (!storage) return
+
   storage.removeItem(AUTH_STORAGE_KEY)
 }
 

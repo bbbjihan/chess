@@ -20,6 +20,7 @@ The app can play a local human-vs-computer game by asking a browser-side Stockfi
 - Stockfish runs through a browser `Worker` using UCI commands.
 - The default worker asset path is `/stockfish/stockfish.js`; deployments must provide that same-origin worker and any WASM files it loads.
 - The app sends the current position as FEN and reads `bestmove` responses.
+- The first move request may spend extra time initializing the WASM engine; timeout handling must be long enough for slower browsers while still surfacing a clear unavailable state.
 - Difficulty maps to bounded Stockfish search settings so lower levels respond quickly and higher levels search deeper.
 - Returned moves are validated by the local chess engine before being applied.
 

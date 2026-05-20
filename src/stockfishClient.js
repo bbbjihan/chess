@@ -53,7 +53,7 @@ export class StockfishClient {
   constructor({
     WorkerCtor = globalThis.Worker,
     workerUrl = DEFAULT_STOCKFISH_WORKER_URL,
-    timeoutMs = 7000,
+    timeoutMs = 45000,
   } = {}) {
     this.WorkerCtor = WorkerCtor
     this.workerUrl = workerUrl

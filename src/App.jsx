@@ -64,37 +64,42 @@ function App() {
     if (!authConfigured) return undefined
 
     let cancelled = false
-    const callbackSession = extractSessionFromUrl(window.location.href)
-    const activeSession = callbackSession || readStoredSession()
 
-    if (callbackSession) {
-      storeSession(callbackSession)
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
-    }
+    async function hydrateAuthSession() {
+      const callbackSession = extractSessionFromUrl(window.location.href)
+      const activeSession = callbackSession || readStoredSession()
 
-    if (!activeSession?.accessToken) {
-      setAuthStatus('signed-out')
-      return undefined
-    }
+      if (callbackSession) {
+        storeSession(callbackSession)
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      }
 
-    setSession(activeSession)
-    setAuthStatus('loading')
+      if (!activeSession?.accessToken) {
+        if (!cancelled) setAuthStatus('signed-out')
+        return
+      }
 
-    fetchSupabaseUser({ ...authConfig, accessToken: activeSession.accessToken })
-      .then((user) => {
+      if (cancelled) return
+      setSession(activeSession)
+      setAuthStatus('loading')
+
+      try {
+        const user = await fetchSupabaseUser({ ...authConfig, accessToken: activeSession.accessToken })
         if (cancelled) return
         setProfile(formatUserProfile(user))
         setAuthStatus('signed-in')
         setAuthMessage('')
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) return
         clearStoredSession()
         setSession(null)
         setProfile(null)
         setAuthStatus('signed-out')
         setAuthMessage(error.message)
-      })
+      }
+    }
+
+    hydrateAuthSession()
 
     return () => {
       cancelled = true

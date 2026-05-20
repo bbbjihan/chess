@@ -21,6 +21,7 @@ The app supports Supabase OAuth authentication with Google as the first provider
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
 - The Supabase project must have Google enabled as an auth provider and allow the app URL as an OAuth redirect URL.
+- CI, PR preview, and production builds must receive the same `VITE_SUPABASE_*` values at build time from repository secrets so deployed bundles can show the Google login control.
 
 ## Development expectations
 

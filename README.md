@@ -11,7 +11,9 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
-In Supabase Auth, enable Google as an OAuth provider and add your local or preview app URL to the allowed redirect URLs. The app uses those values to start Google OAuth, fetch the signed-in user's name/email/avatar, and sign out.
+In Supabase Auth, enable Google as an OAuth provider and add your local, preview, or production app URL to the allowed redirect URLs. The app uses those values to start Google OAuth, fetch the signed-in user's name/email/avatar, and sign out.
+
+For GitHub Actions previews and production, store the same browser-safe values as repository secrets named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These values are injected into Vite during `pnpm build`; do not use a Supabase service-role key.
 
 Currently, two official plugins are available:
 

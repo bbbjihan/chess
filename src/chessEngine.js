@@ -19,6 +19,8 @@ export function createInitialState() {
     winner: null,
     captured: { white: [], black: [] },
     history: [],
+    castlingRights: createCastlingRights(),
+    enPassant: null,
   }
 }
 
@@ -42,6 +44,14 @@ export function cloneState(state) {
     },
     history: [...state.history],
     selected: state.selected ? { ...state.selected } : null,
+    castlingRights: cloneCastlingRights(state.castlingRights),
+    enPassant: state.enPassant
+      ? {
+          target: { ...state.enPassant.target },
+          pawn: { ...state.enPassant.pawn },
+          color: state.enPassant.color,
+        }
+      : null,
   }
 }
 
@@ -49,8 +59,8 @@ export function getLegalMoves(state, from) {
   const piece = getPiece(state.board, from)
   if (!piece || piece.color !== state.turn || isGameComplete(state.status)) return []
 
-  return getPseudoLegalMoves(state.board, from).filter((to) => {
-    const nextBoard = moveOnBoard(state.board, from, to)
+  return getPseudoLegalMoves(state, from).filter((to) => {
+    const nextBoard = moveOnBoard(state, from, to)
     return !isInCheck(nextBoard, piece.color)
   })
 }
@@ -70,8 +80,8 @@ export function makeMove(state, from, to) {
   }
 
   const next = cloneState(state)
-  const capturedPiece = getPiece(next.board, to)
-  next.board = moveOnBoard(next.board, from, to)
+  const capturedPiece = getCapturedPieceForMove(next, from, to)
+  next.board = moveOnBoard(next, from, to)
 
   const movedPiece = getPiece(next.board, to)
   if (movedPiece.type === 'pawn' && (to.row === 0 || to.row === BOARD_SIZE - 1)) {
@@ -84,6 +94,8 @@ export function makeMove(state, from, to) {
 
   next.turn = opposite(piece.color)
   next.selected = null
+  next.castlingRights = updateCastlingRights(next.castlingRights, piece, from, capturedPiece, getCapturedSquareForMove(state, from, to))
+  next.enPassant = getNextEnPassant(piece, from, to)
   next.history.push({
     from: coordsToSquare(from),
     to: coordsToSquare(to),
@@ -125,21 +137,63 @@ function cloneBoard(board) {
   return board.map((row) => row.map((piece) => (piece ? { ...piece } : null)))
 }
 
-function moveOnBoard(board, from, to) {
-  const nextBoard = cloneBoard(board)
+function moveOnBoard(state, from, to) {
+  const nextBoard = cloneBoard(state.board)
   const piece = nextBoard[from.row][from.col]
   nextBoard[from.row][from.col] = null
+
+  if (isEnPassantMove(state, from, to)) {
+    nextBoard[from.row][to.col] = null
+  }
+
   nextBoard[to.row][to.col] = piece
+
+  if (isCastlingMove(piece, from, to)) {
+    const rookFromCol = to.col > from.col ? BOARD_SIZE - 1 : 0
+    const rookToCol = to.col > from.col ? to.col - 1 : to.col + 1
+    nextBoard[to.row][rookToCol] = nextBoard[to.row][rookFromCol]
+    nextBoard[to.row][rookFromCol] = null
+  }
+
   return nextBoard
 }
 
-function getPseudoLegalMoves(board, from) {
+function getPseudoLegalMoves(state, from) {
+  const { board } = state
   const piece = getPiece(board, from)
   if (!piece) return []
 
   switch (piece.type) {
     case 'pawn':
-      return getPawnMoves(board, from, piece.color)
+      return getPawnMoves(state, from, piece.color)
+    case 'knight':
+      return getJumpMoves(board, from, piece.color, [
+        [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+        [1, -2], [1, 2], [2, -1], [2, 1],
+      ])
+    case 'bishop':
+      return getSlidingMoves(board, from, piece.color, [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+    case 'rook':
+      return getSlidingMoves(board, from, piece.color, [[-1, 0], [1, 0], [0, -1], [0, 1]])
+    case 'queen':
+      return getSlidingMoves(board, from, piece.color, [
+        [-1, -1], [-1, 1], [1, -1], [1, 1],
+        [-1, 0], [1, 0], [0, -1], [0, 1],
+      ])
+    case 'king':
+      return getKingMoves(state, from, piece.color)
+    default:
+      return []
+  }
+}
+
+function getBasicPseudoLegalMoves(board, from) {
+  const piece = getPiece(board, from)
+  if (!piece) return []
+
+  switch (piece.type) {
+    case 'pawn':
+      return getBasicPawnMoves(board, from, piece.color)
     case 'knight':
       return getJumpMoves(board, from, piece.color, [
         [-2, -1], [-2, 1], [-1, -2], [-1, 2],
@@ -165,7 +219,14 @@ function getPseudoLegalMoves(board, from) {
   }
 }
 
-function getPawnMoves(board, from, color) {
+function getPawnMoves(state, from, color) {
+  const moves = getBasicPawnMoves(state.board, from, color)
+  const enPassantTarget = getEnPassantMove(state, from, color)
+  if (enPassantTarget) moves.push(enPassantTarget)
+  return moves
+}
+
+function getBasicPawnMoves(board, from, color) {
   const direction = color === 'white' ? -1 : 1
   const startRow = color === 'white' ? 6 : 1
   const moves = []
@@ -185,6 +246,17 @@ function getPawnMoves(board, from, color) {
     if (targetPiece && targetPiece.color !== color) {
       moves.push(target)
     }
+  }
+
+  return moves
+}
+
+function getKingMoves(state, from, color) {
+  const moves = getBasicPseudoLegalMoves(state.board, from)
+
+  for (const side of ['kingSide', 'queenSide']) {
+    const castlingTarget = getCastlingMove(state, from, color, side)
+    if (castlingTarget) moves.push(castlingTarget)
   }
 
   return moves
@@ -239,7 +311,7 @@ function isSquareAttacked(board, square, attackingColor) {
         continue
       }
 
-      if (containsCoord(getPseudoLegalMoves(board, from), square)) {
+      if (containsCoord(getBasicPseudoLegalMoves(board, from), square)) {
         return true
       }
     }
@@ -277,8 +349,135 @@ function isGameComplete(status) {
   return status === 'checkmate' || status === 'stalemate'
 }
 
+function createCastlingRights() {
+  return {
+    white: { kingSide: true, queenSide: true },
+    black: { kingSide: true, queenSide: true },
+  }
+}
+
+function cloneCastlingRights(castlingRights) {
+  if (!castlingRights) {
+    return {
+      white: { kingSide: false, queenSide: false },
+      black: { kingSide: false, queenSide: false },
+    }
+  }
+
+  return {
+    white: { ...castlingRights.white },
+    black: { ...castlingRights.black },
+  }
+}
+
+function getCastlingMove(state, from, color, side) {
+  const rights = state.castlingRights?.[color]
+  if (!rights?.[side]) return null
+
+  const homeRow = color === 'white' ? 7 : 0
+  if (from.row !== homeRow || from.col !== 4) return null
+  if (isInCheck(state.board, color)) return null
+
+  const rookCol = side === 'kingSide' ? 7 : 0
+  const targetCol = side === 'kingSide' ? 6 : 2
+  const transitCol = side === 'kingSide' ? 5 : 3
+  const emptyCols = side === 'kingSide' ? [5, 6] : [1, 2, 3]
+  const rook = getPiece(state.board, { row: homeRow, col: rookCol })
+
+  if (rook?.type !== 'rook' || rook.color !== color) return null
+  if (emptyCols.some((col) => getPiece(state.board, { row: homeRow, col }))) return null
+  if (isSquareAttacked(state.board, { row: homeRow, col: transitCol }, opposite(color))) return null
+  if (isSquareAttacked(state.board, { row: homeRow, col: targetCol }, opposite(color))) return null
+
+  return { row: homeRow, col: targetCol }
+}
+
+function updateCastlingRights(castlingRights, piece, from, capturedPiece, capturedSquare) {
+  const nextRights = cloneCastlingRights(castlingRights)
+
+  if (piece.type === 'king') {
+    nextRights[piece.color].kingSide = false
+    nextRights[piece.color].queenSide = false
+  }
+
+  if (piece.type === 'rook') {
+    removeRookCastlingRight(nextRights, piece.color, from)
+  }
+
+  if (capturedPiece?.type === 'rook' && capturedSquare) {
+    removeRookCastlingRight(nextRights, capturedPiece.color, capturedSquare)
+  }
+
+  return nextRights
+}
+
+function removeRookCastlingRight(castlingRights, color, square) {
+  const homeRow = color === 'white' ? 7 : 0
+  if (square.row !== homeRow) return
+
+  if (square.col === 0) {
+    castlingRights[color].queenSide = false
+  } else if (square.col === BOARD_SIZE - 1) {
+    castlingRights[color].kingSide = false
+  }
+}
+
+function getNextEnPassant(piece, from, to) {
+  if (piece.type !== 'pawn' || Math.abs(to.row - from.row) !== 2) return null
+
+  return {
+    target: { row: (from.row + to.row) / 2, col: from.col },
+    pawn: { ...to },
+    color: piece.color,
+  }
+}
+
+function getEnPassantMove(state, from, color) {
+  if (!state.enPassant || state.enPassant.color === color) return null
+
+  const direction = color === 'white' ? -1 : 1
+  const target = state.enPassant.target
+  if (target.row !== from.row + direction || Math.abs(target.col - from.col) !== 1) return null
+
+  const vulnerablePawn = getPiece(state.board, state.enPassant.pawn)
+  if (vulnerablePawn?.type !== 'pawn' || vulnerablePawn.color === color) return null
+
+  return { ...target }
+}
+
+function isEnPassantMove(state, from, to) {
+  const piece = getPiece(state.board, from)
+  if (piece?.type !== 'pawn') return false
+  if (getPiece(state.board, to)) return false
+  return Boolean(getEnPassantMove(state, from, piece.color) && coordsEqual(state.enPassant.target, to))
+}
+
+function getCapturedPieceForMove(state, from, to) {
+  if (isEnPassantMove(state, from, to)) {
+    return getPiece(state.board, { row: from.row, col: to.col })
+  }
+
+  return getPiece(state.board, to)
+}
+
+function getCapturedSquareForMove(state, from, to) {
+  if (isEnPassantMove(state, from, to)) {
+    return { row: from.row, col: to.col }
+  }
+
+  return to
+}
+
+function isCastlingMove(piece, from, to) {
+  return piece?.type === 'king' && Math.abs(to.col - from.col) === 2
+}
+
 function containsCoord(coords, target) {
   return coords.some(({ row, col }) => row === target.row && col === target.col)
+}
+
+function coordsEqual(a, b) {
+  return a.row === b.row && a.col === b.col
 }
 
 function isInside(row, col) {

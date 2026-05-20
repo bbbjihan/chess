@@ -109,7 +109,12 @@ export function createRealtimeRoomClient({
 
   function sendFrame(event, payload = {}) {
     if (!socket || socket.readyState !== WebSocketImpl.OPEN) return false
-    socket.send(JSON.stringify([null, nextRef(), topic, event, payload]))
+    socket.send(JSON.stringify({
+      event,
+      payload,
+      ref: nextRef(),
+      topic,
+    }))
     return true
   }
 
@@ -133,15 +138,23 @@ export function createRealtimeRoomClient({
       })
       heartbeatTimer = globalThis.setInterval(() => {
         if (socket?.readyState === WebSocketImpl.OPEN) {
-          socket.send(JSON.stringify([null, nextRef(), 'phoenix', 'heartbeat', {}]))
+          socket.send(JSON.stringify({
+            event: 'heartbeat',
+            payload: {},
+            ref: nextRef(),
+            topic: 'phoenix',
+          }))
         }
       }, HEARTBEAT_INTERVAL_MS)
-      onStatus?.('connected', '')
     })
 
     socket.addEventListener('message', (event) => {
       const frame = parseRealtimeFrame(event.data)
       const payload = frame?.payload
+      if (frame?.topic === topic && frame?.event === 'phx_reply' && payload?.status === 'ok') {
+        onStatus?.('connected', '')
+        return
+      }
       if (frame?.event !== 'broadcast' || payload?.payload?.clientId === clientId) return
       onMessage?.(payload.payload)
     })
@@ -193,6 +206,7 @@ export function buildRealtimeSocketUrl(supabaseUrl, anonKey) {
 function parseRealtimeFrame(data) {
   try {
     const frame = JSON.parse(data)
+    if (frame && typeof frame === 'object' && !Array.isArray(frame)) return frame
     if (!Array.isArray(frame)) return null
     const [, ref, topic, event, payload] = frame
     return { event, payload, ref, topic }

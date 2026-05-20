@@ -5,6 +5,7 @@ import {
   applyOnlineMessage,
   buildInviteUrl,
   createOnlineRoom,
+  createRealtimeRoomClient,
   getOnlineConfig,
   getRoomIdFromUrl,
   getRoomMetadata,
@@ -83,4 +84,103 @@ describe('online realtime room helpers', () => {
       to: 'e5',
     })).toBe(state)
   })
+
+  it('uses Supabase Phoenix object frames and waits for join ack before reporting connected', () => {
+    const statuses = []
+    const messages = []
+    const WebSocketImpl = createFakeWebSocket()
+    const client = createRealtimeRoomClient({
+      anonKey: 'anon-key',
+      clientId: 'white-browser',
+      onMessage: (message) => messages.push(message),
+      onStatus: (status) => statuses.push(status),
+      roomId: 'room-123',
+      supabaseUrl: 'https://project.supabase.co',
+      WebSocketImpl,
+    })
+
+    client.connect()
+    const socket = WebSocketImpl.instances[0]
+    socket.open()
+
+    expect(statuses).toEqual(['connecting'])
+    expect(JSON.parse(socket.sent[0])).toMatchObject({
+      event: 'phx_join',
+      topic: 'realtime:online-chess:room-123',
+    })
+
+    socket.receive({
+      event: 'phx_reply',
+      payload: { status: 'ok' },
+      ref: '1',
+      topic: 'realtime:online-chess:room-123',
+    })
+
+    expect(statuses).toEqual(['connecting', 'connected'])
+
+    client.broadcast({ type: 'move', from: 'e2', to: 'e4' })
+    expect(JSON.parse(socket.sent[1])).toMatchObject({
+      event: 'broadcast',
+      payload: {
+        event: 'move',
+        payload: {
+          clientId: 'white-browser',
+          from: 'e2',
+          to: 'e4',
+          type: 'move',
+        },
+        type: 'broadcast',
+      },
+      topic: 'realtime:online-chess:room-123',
+    })
+
+    socket.receive({
+      event: 'broadcast',
+      payload: {
+        event: 'move',
+        payload: { clientId: 'black-browser', from: 'e7', to: 'e5', type: 'move' },
+        type: 'broadcast',
+      },
+      topic: 'realtime:online-chess:room-123',
+    })
+
+    expect(messages).toEqual([{ clientId: 'black-browser', from: 'e7', to: 'e5', type: 'move' }])
+  })
 })
+
+function createFakeWebSocket() {
+  return class FakeWebSocket {
+    static OPEN = 1
+    static instances = []
+
+    constructor(url) {
+      this.listeners = {}
+      this.readyState = 0
+      this.sent = []
+      this.url = url
+      FakeWebSocket.instances.push(this)
+    }
+
+    addEventListener(event, listener) {
+      this.listeners[event] = listener
+    }
+
+    send(frame) {
+      this.sent.push(frame)
+    }
+
+    close() {
+      this.readyState = 3
+      this.listeners.close?.({})
+    }
+
+    open() {
+      this.readyState = FakeWebSocket.OPEN
+      this.listeners.open?.({})
+    }
+
+    receive(frame) {
+      this.listeners.message?.({ data: JSON.stringify(frame) })
+    }
+  }
+}

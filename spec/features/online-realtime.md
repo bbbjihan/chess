@@ -14,6 +14,7 @@ The app supports a Supabase Realtime based 1:1 online chess MVP on top of the lo
 - Room state is synchronized through Supabase Realtime broadcast messages scoped to the room topic.
 - Moves are still validated locally by the existing chess engine before being sent or applied.
 - Remote moves, resets, and synchronization messages must update the local board without requiring a page refresh.
+- Realtime WebSocket frames must use the Phoenix object envelope expected by Supabase Realtime, and the UI may report `connected` only after the channel join receives an `ok` reply.
 - If realtime transport disconnects or cannot start, local play remains available and the online panel reports the failure.
 
 ## User-facing expectations

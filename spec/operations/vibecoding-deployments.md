@@ -16,6 +16,14 @@ Deployment behavior must keep GitHub as the source of truth while allowing Disco
 - Preview work must stay isolated from production.
 - Preview deployment changes should be documented here when behavior changes.
 
+## Build-time environment
+
+- Preview, production, and CI builds must pass Vite public Supabase configuration into `pnpm build` when online features are enabled:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+- These values are GitHub Actions secrets for this repository. They are public browser configuration once bundled, but using secrets keeps workflow configuration consistent and avoids committing environment-specific values.
+- When either value is unset, the build still succeeds and the deployed app must show online play as unavailable while preserving offline/local play.
+
 ## Local orchestration
 
 - Vibe-coding orchestration lives outside this app repo in Hermes-side config/skills/scripts.

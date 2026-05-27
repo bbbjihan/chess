@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   buildGoogleOAuthUrl,
@@ -13,6 +13,17 @@ import {
   storeSession,
 } from './auth.js'
 import { createInitialState, coordsToSquare, getLegalMoves, makeMove } from './chessEngine.js'
+import {
+  PLAYER_MODES,
+  applyComputerMove,
+  shouldRequestComputerMove,
+} from './computerOpponent.js'
+import {
+  DIFFICULTY_SETTINGS,
+  StockfishClient,
+  describeComputerMove,
+  formatFen,
+} from './stockfishClient.js'
 
 const PIECES = {
   white: {
@@ -52,6 +63,11 @@ function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [authMessage, setAuthMessage] = useState('')
+  const [playerMode, setPlayerMode] = useState(PLAYER_MODES.local)
+  const [difficulty, setDifficulty] = useState('normal')
+  const [isComputerThinking, setIsComputerThinking] = useState(false)
+  const [computerError, setComputerError] = useState('')
+  const stockfishClientRef = useRef(null)
 
   const legalMoves = useMemo(
     () => (selected ? getLegalMoves(game, selected) : []),
@@ -59,6 +75,55 @@ function App() {
   )
 
   const statusText = getStatusText(game)
+  const isComputerMode = playerMode === PLAYER_MODES.computer
+  const isHumanInputLocked = isComputerThinking || (isComputerMode && game.turn === 'black')
+
+  useEffect(() => {
+    if (!(isComputerMode && game.turn === 'black' && isComputerThinking)) return undefined
+
+    let cancelled = false
+
+    if (!stockfishClientRef.current) {
+      stockfishClientRef.current = new StockfishClient()
+    }
+
+    stockfishClientRef.current
+      .getBestMove({ fen: formatFen(game), difficulty })
+      .then((move) => {
+        if (cancelled) return
+
+        setGame((currentGame) => {
+          try {
+            if (currentGame.turn !== 'black' || currentGame.status === 'checkmate' || currentGame.status === 'stalemate') {
+              return currentGame
+            }
+
+            const nextGame = applyComputerMove(currentGame, move)
+            setSelected(null)
+            setMessage(`Stockfish played ${describeComputerMove(move)}. ${getStatusText(nextGame)}.`)
+            return nextGame
+          } catch (error) {
+            setComputerError(error.message)
+            setMessage(`Computer move failed: ${error.message}`)
+            return currentGame
+          }
+        })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setComputerError(error.message)
+        setMessage(`Stockfish unavailable. Switch to local two-player mode to continue. ${error.message}`)
+      })
+      .finally(() => {
+        if (!cancelled) setIsComputerThinking(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [difficulty, game, isComputerMode, isComputerThinking])
+
+  useEffect(() => () => stockfishClientRef.current?.terminate(), [])
 
   useEffect(() => {
     if (!authConfigured) return undefined
@@ -111,6 +176,10 @@ function App() {
     const piece = game.board[row][col]
 
     if (game.status === 'checkmate' || game.status === 'stalemate') return
+    if (isHumanInputLocked) {
+      setMessage(isComputerThinking ? 'Stockfish is thinking...' : 'Computer opponent is playing black.')
+      return
+    }
 
     if (!selected) {
       if (piece?.color === game.turn) {
@@ -136,7 +205,13 @@ function App() {
       const nextGame = makeMove(game, selected, target)
       setGame(nextGame)
       setSelected(null)
-      setMessage(buildMoveMessage(nextGame))
+      if (shouldRequestComputerMove(nextGame, playerMode, false)) {
+        setComputerError('')
+        setIsComputerThinking(true)
+        setMessage('Stockfish is thinking...')
+      } else {
+        setMessage(buildMoveMessage(nextGame))
+      }
     } catch (error) {
       setMessage(error.message)
     }
@@ -145,6 +220,8 @@ function App() {
   function resetGame() {
     setGame(createInitialState())
     setSelected(null)
+    setComputerError('')
+    setIsComputerThinking(false)
     setMessage('New game started. White to move.')
   }
 
@@ -267,6 +344,57 @@ function App() {
           </div>
 
           <p className="message" role="status">{message}</p>
+
+          <div className="control-group" aria-label="Game mode">
+            <p className="panel-label">상대</p>
+            <div className="segmented-control">
+              <button
+                aria-pressed={playerMode === PLAYER_MODES.local}
+                className={playerMode === PLAYER_MODES.local ? 'active' : ''}
+                onClick={() => {
+                  setPlayerMode(PLAYER_MODES.local)
+                  setComputerError('')
+                  setMessage(`${capitalize(game.turn)} to move.`)
+                }}
+                type="button"
+              >
+                2인
+              </button>
+              <button
+                aria-pressed={playerMode === PLAYER_MODES.computer}
+                className={playerMode === PLAYER_MODES.computer ? 'active' : ''}
+                onClick={() => {
+                  setPlayerMode(PLAYER_MODES.computer)
+                  setComputerError('')
+                  if (game.turn === 'black' && game.status !== 'checkmate' && game.status !== 'stalemate') {
+                    setIsComputerThinking(true)
+                    setMessage('Stockfish is thinking...')
+                  } else {
+                    setMessage('Computer opponent enabled. You play white.')
+                  }
+                }}
+                type="button"
+              >
+                컴퓨터
+              </button>
+            </div>
+          </div>
+
+          <label className="select-field">
+            <span className="panel-label">난이도</span>
+            <select
+              disabled={!isComputerMode || isComputerThinking}
+              onChange={(event) => setDifficulty(event.target.value)}
+              value={difficulty}
+            >
+              {Object.entries(DIFFICULTY_SETTINGS).map(([value, settings]) => (
+                <option key={value} value={value}>{settings.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {isComputerThinking && <p className="engine-note">Stockfish is calculating in a browser worker.</p>}
+          {computerError && <p className="engine-error" role="alert">{computerError}</p>}
 
           <div className="stats-grid">
             <div>

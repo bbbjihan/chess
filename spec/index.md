@@ -10,6 +10,7 @@ This directory is the source of truth for repository specs. Read this index firs
 ## Product and feature specs
 
 - [`features/chess-game.md`](features/chess-game.md) — current user-facing chess game behavior.
+- [`features/auth-profile.md`](features/auth-profile.md) — Supabase OAuth sign-in/out and user profile display behavior.
 - [`features/chess-engine.md`](features/chess-engine.md) — chess rules engine behavior and testing focus.
 - [`features/online-chess/domain-state.md`](features/online-chess/domain-state.md) — shared online chess terminology, state model, move contract, and result model.
 - [`features/online-chess/supabase-schema.md`](features/online-chess/supabase-schema.md) — expected Supabase tables, RLS, RPCs, and realtime channels for online chess.

@@ -1,6 +1,37 @@
 # React + Vite
 
+## Online play environment
+
+Supabase Realtime invite-link play is enabled at build time with Vite public environment variables:
+
+```sh
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+For GitHub Actions preview/production deployments, configure them as repository secrets with the same names:
+
+```sh
+gh secret set VITE_SUPABASE_URL --repo bbbjihan/chess --body 'https://your-project-ref.supabase.co'
+gh secret set VITE_SUPABASE_ANON_KEY --repo bbbjihan/chess --body 'your-supabase-anon-key'
+```
+
+If either value is missing, the app still builds and local/offline chess remains available, but the online panel reports that Supabase Realtime is unavailable.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+## Supabase OAuth
+
+Copy `.env.example` to `.env.local` and set:
+
+```sh
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+In Supabase Auth, enable Google as an OAuth provider and add your local, preview, or production app URL to the allowed redirect URLs. The app uses those values to start Google OAuth, fetch the signed-in user's name/email/avatar, and sign out.
+
+For GitHub Actions previews and production, store the same browser-safe values as repository secrets named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These values are injected into Vite during `pnpm build`; do not use a Supabase service-role key.
 
 Currently, two official plugins are available:
 

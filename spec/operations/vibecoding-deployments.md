@@ -17,11 +17,13 @@ Deployment behavior must keep GitHub as the source of truth while allowing Disco
 - Preview builds must inject non-service-role browser configuration from repository secrets when features depend on Vite build-time environment variables, including `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Supabase OAuth.
 - Preview deployment changes should be documented here when behavior changes.
 
-## Build-time configuration
+## Build-time environment
 
-- Vite only exposes browser configuration with the `VITE_` prefix at build time.
-- CI, preview, and production workflows should pass `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from GitHub repository secrets into `pnpm build` when Supabase OAuth/profile features are enabled.
-- Missing Supabase values should not break local or fork PR builds; the app should remain playable and show a concise configuration message.
+- Preview, production, and CI builds must pass Vite public Supabase configuration into `pnpm build` when online features are enabled:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+- These values are GitHub Actions secrets for this repository. They are public browser configuration once bundled, but using secrets keeps workflow configuration consistent and avoids committing environment-specific values.
+- When either value is unset, the build still succeeds and the deployed app must show online play as unavailable while preserving offline/local play.
 
 ## Local orchestration
 

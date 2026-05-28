@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   buildGoogleOAuthUrl,
@@ -24,6 +25,15 @@ import {
   describeComputerMove,
   formatFen,
 } from './stockfishClient.js'
+import {
+  applyOnlineMessage,
+  buildInviteUrl,
+  createOnlineRoom,
+  createRealtimeRoomClient,
+  getMovePayload,
+  getOnlineConfig,
+  getRoomMetadata,
+} from './onlineRoom.js'
 
 const PIECES = {
   white: {
@@ -68,6 +78,19 @@ function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [authMessage, setAuthMessage] = useState('')
+  const onlineConfig = useMemo(() => getOnlineConfig(), [])
+  const [onlineRoom, setOnlineRoom] = useState(() => {
+    if (typeof window === 'undefined') return null
+    return getRoomMetadata(window.location.href)
+  })
+  const [connectionStatus, setConnectionStatus] = useState(() => {
+    if (!onlineConfig.available) return 'unavailable'
+    return onlineRoom ? 'connecting' : 'local'
+  })
+  const [onlineNotice, setOnlineNotice] = useState(() => onlineConfig.reason)
+  const onlineClientRef = useRef(null)
+  const gameRef = useRef(game)
+  const clientIdRef = useRef(createClientId())
 
   const legalMoves = useMemo(
     () => (selected ? getLegalMoves(game, selected) : []),
@@ -77,6 +100,10 @@ function App() {
   const statusText = getStatusText(game)
   const isComputerMode = playerMode === PLAYER_MODES.computer
   const isHumanInputLocked = isComputerThinking || (isComputerMode && game.turn === 'black')
+  const inviteLink = useMemo(() => {
+    if (!onlineRoom || typeof window === 'undefined') return ''
+    return buildInviteUrl(window.location.href, onlineRoom.roomId)
+  }, [onlineRoom])
 
   useEffect(() => {
     if (!(isComputerMode && game.turn === 'black' && isComputerThinking)) return undefined
@@ -171,6 +198,54 @@ function App() {
     }
   }, [authConfig, authConfigured])
 
+  useEffect(() => {
+    gameRef.current = game
+  }, [game])
+
+  const handleOnlineMessage = useCallback((payload) => {
+    if (payload?.type === 'sync-request') {
+      onlineClientRef.current?.broadcast({ type: 'state', game: gameRef.current })
+      return
+    }
+
+    setGame((current) => {
+      const nextGame = applyOnlineMessage(current, payload)
+      if (nextGame !== current) {
+        gameRef.current = nextGame
+        setSelected(null)
+        setMessage(payload.type === 'reset' ? '상대가 새 게임을 시작했습니다.' : buildMoveMessage(nextGame))
+      }
+      return nextGame
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!onlineRoom || !onlineConfig.available) return undefined
+
+    const client = createRealtimeRoomClient({
+      ...onlineConfig,
+      clientId: clientIdRef.current,
+      onMessage: handleOnlineMessage,
+      onStatus: (status, notice) => {
+        setConnectionStatus(status)
+        setOnlineNotice(notice)
+      },
+      roomId: onlineRoom.roomId,
+    })
+
+    onlineClientRef.current = client
+    client.connect()
+    const syncTimer = globalThis.setTimeout(() => {
+      client.broadcast({ type: 'sync-request' })
+    }, 800)
+
+    return () => {
+      globalThis.clearTimeout(syncTimer)
+      client.disconnect()
+      onlineClientRef.current = null
+    }
+  }, [handleOnlineMessage, onlineConfig, onlineRoom])
+
   function handleSquareClick(row, col) {
     const target = { row, col }
     const piece = game.board[row][col]
@@ -178,6 +253,10 @@ function App() {
     if (game.status === 'checkmate' || game.status === 'stalemate') return
     if (isHumanInputLocked) {
       setMessage(isComputerThinking ? 'Stockfish is thinking...' : 'Computer opponent is playing black.')
+      return
+    }
+    if (onlineRoom && game.turn !== onlineRoom.playerColor) {
+      setMessage(`온라인 대국에서 ${capitalize(game.turn)} 차례입니다. 상대의 수를 기다리세요.`)
       return
     }
 
@@ -203,6 +282,7 @@ function App() {
 
     try {
       const nextGame = makeMove(game, selected, target)
+      const lastMove = nextGame.history.at(-1)
       setGame(nextGame)
       setSelected(null)
       if (shouldRequestComputerMove(nextGame, playerMode, false)) {
@@ -212,17 +292,55 @@ function App() {
       } else {
         setMessage(buildMoveMessage(nextGame))
       }
+      if (lastMove) {
+        onlineClientRef.current?.broadcast(getMovePayload(lastMove))
+      }
     } catch (error) {
       setMessage(error.message)
     }
   }
 
   function resetGame() {
-    setGame(createInitialState())
+    const nextGame = createInitialState()
+    setGame(nextGame)
     setSelected(null)
     setComputerError('')
     setIsComputerThinking(false)
     setMessage('New game started. White to move.')
+    onlineClientRef.current?.broadcast({ type: 'reset' })
+  }
+
+  function startOnlineRoom() {
+    if (!onlineConfig.available) {
+      setOnlineNotice(onlineConfig.reason)
+      setConnectionStatus('unavailable')
+      return
+    }
+
+    const room = createOnlineRoom()
+    setGame(createInitialState())
+    setSelected(null)
+    setMessage('온라인 방을 만들었습니다. 초대 링크를 공유하세요.')
+    setOnlineRoom(room)
+    updateRoomUrl(room.roomId)
+  }
+
+  function leaveOnlineRoom() {
+    setOnlineRoom(null)
+    setOnlineNotice(onlineConfig.reason)
+    setConnectionStatus(onlineConfig.available ? 'local' : 'unavailable')
+    removeRoomUrl()
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return
+
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setOnlineNotice('Invite link copied.')
+    } catch {
+      setOnlineNotice(inviteLink)
+    }
   }
 
   function handleLogin() {
@@ -411,6 +529,46 @@ function App() {
             새 게임 시작
           </button>
 
+          <div className="online-panel">
+            <div>
+              <p className="panel-label">온라인 대국</p>
+              <h2>{getOnlineStatusText(connectionStatus)}</h2>
+            </div>
+
+            {onlineRoom ? (
+              <>
+                <p className="online-copy">
+                  {capitalize(onlineRoom.playerColor)}로 접속 중입니다. 초대 링크로 1:1 대국을 이어갑니다.
+                </p>
+                <div className="invite-row">
+                  <input aria-label="Invite link" readOnly value={inviteLink} />
+                  <button onClick={copyInviteLink} type="button">복사</button>
+                </div>
+                <button className="secondary-button" onClick={leaveOnlineRoom} type="button">
+                  온라인 방 나가기
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="online-copy">
+                  {onlineConfig.available
+                    ? '초대 링크를 만들어 흰색으로 시작하거나, 받은 링크를 열어 검은색으로 참가하세요.'
+                    : onlineConfig.reason}
+                </p>
+                <button
+                  className="secondary-button"
+                  disabled={!onlineConfig.available}
+                  onClick={startOnlineRoom}
+                  type="button"
+                >
+                  초대 링크 만들기
+                </button>
+              </>
+            )}
+
+            {onlineNotice && <p className="online-notice">{onlineNotice}</p>}
+          </div>
+
           <div className="move-list">
             <p className="panel-label">기보</p>
             {game.history.length === 0 ? (
@@ -493,6 +651,14 @@ function getStatusText(game) {
   return `${capitalize(game.turn)} to move`
 }
 
+function getOnlineStatusText(status) {
+  if (status === 'connected') return 'Realtime connected'
+  if (status === 'connecting') return 'Connecting'
+  if (status === 'disconnected') return 'Disconnected'
+  if (status === 'unavailable') return 'Online unavailable'
+  return 'Local play'
+}
+
 function buildMoveMessage(game) {
   const lastMove = game.history.at(-1)
   if (game.status === 'checkmate') return `${lastMove.notation}. Checkmate — ${capitalize(game.winner)} wins.`
@@ -515,6 +681,23 @@ function capitalize(value) {
 
 function getInitial(value) {
   return value?.trim().charAt(0).toUpperCase() || 'P'
+}
+
+function createClientId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+function updateRoomUrl(roomId) {
+  if (typeof window === 'undefined') return
+  window.history.replaceState(null, '', buildInviteUrl(window.location.href, roomId))
+}
+
+function removeRoomUrl() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.delete('room')
+  window.history.replaceState(null, '', url.toString())
 }
 
 export default App

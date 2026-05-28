@@ -477,6 +477,68 @@ h2 {
   transform: translateY(-1px);
 }
 
+.online-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.online-copy,
+.online-notice {
+  margin: 0;
+  color: #cbd7e8;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.online-notice {
+  color: #8df4de;
+  overflow-wrap: anywhere;
+}
+
+.invite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.invite-row input {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #eef6ff;
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.invite-row button,
+.secondary-button {
+  border: 1px solid rgba(141, 244, 222, 0.36);
+  border-radius: 8px;
+  color: #dffef8;
+  background: rgba(141, 244, 222, 0.08);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invite-row button {
+  padding: 0 12px;
+}
+
+.secondary-button {
+  width: 100%;
+  padding: 12px 14px;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .move-list {
   margin-top: 24px;
 }

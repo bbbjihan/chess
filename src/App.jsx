@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import {
+  buildGoogleOAuthUrl,
+  clearStoredSession,
+  extractSessionFromUrl,
+  fetchSupabaseUser,
+  formatUserProfile,
+  getAuthConfig,
+  isSupabaseConfigured,
+  readStoredSession,
+  signOutSupabase,
+  storeSession,
+} from './auth.js'
 import { createInitialState, coordsToSquare, getLegalMoves, makeMove } from './chessEngine.js'
 import {
   PLAYER_MODES,
@@ -42,6 +54,8 @@ const PIECE_NAMES = {
 }
 
 function App() {
+  const authConfig = useMemo(() => getAuthConfig(), [])
+  const authConfigured = isSupabaseConfigured(authConfig)
   const [game, setGame] = useState(() => createInitialState())
   const [selected, setSelected] = useState(null)
   const [message, setMessage] = useState('White to move. Choose a piece to begin.')
@@ -50,6 +64,10 @@ function App() {
   const [isComputerThinking, setIsComputerThinking] = useState(false)
   const [computerError, setComputerError] = useState('')
   const stockfishClientRef = useRef(null)
+  const [authStatus, setAuthStatus] = useState(authConfigured ? 'loading' : 'config-missing')
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [authMessage, setAuthMessage] = useState('')
 
   const legalMoves = useMemo(
     () => (selected ? getLegalMoves(game, selected) : []),
@@ -107,6 +125,52 @@ function App() {
 
   useEffect(() => () => stockfishClientRef.current?.terminate(), [])
 
+  useEffect(() => {
+    if (!authConfigured) return undefined
+
+    let cancelled = false
+
+    async function hydrateAuthSession() {
+      const callbackSession = extractSessionFromUrl(window.location.href)
+      const activeSession = callbackSession || readStoredSession()
+
+      if (callbackSession) {
+        storeSession(callbackSession)
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      }
+
+      if (!activeSession?.accessToken) {
+        if (!cancelled) setAuthStatus('signed-out')
+        return
+      }
+
+      if (cancelled) return
+      setSession(activeSession)
+      setAuthStatus('loading')
+
+      try {
+        const user = await fetchSupabaseUser({ ...authConfig, accessToken: activeSession.accessToken })
+        if (cancelled) return
+        setProfile(formatUserProfile(user))
+        setAuthStatus('signed-in')
+        setAuthMessage('')
+      } catch (error) {
+        if (cancelled) return
+        clearStoredSession()
+        setSession(null)
+        setProfile(null)
+        setAuthStatus('signed-out')
+        setAuthMessage(error.message)
+      }
+    }
+
+    hydrateAuthSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authConfig, authConfigured])
+
   function handleSquareClick(row, col) {
     const target = { row, col }
     const piece = game.board[row][col]
@@ -161,6 +225,30 @@ function App() {
     setMessage('New game started. White to move.')
   }
 
+  function handleLogin() {
+    const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`
+    window.location.assign(buildGoogleOAuthUrl({ ...authConfig, redirectTo }))
+  }
+
+  async function handleLogout() {
+    const activeSession = session || readStoredSession()
+    setAuthStatus('loading')
+
+    try {
+      if (activeSession?.accessToken) {
+        await signOutSupabase({ ...authConfig, accessToken: activeSession.accessToken })
+      }
+      setAuthMessage('')
+    } catch (error) {
+      setAuthMessage(error.message)
+    } finally {
+      clearStoredSession()
+      setSession(null)
+      setProfile(null)
+      setAuthStatus('signed-out')
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="hero-card">
@@ -172,6 +260,24 @@ function App() {
             체크메이트, 스테일메이트를 감지하고 폰은 마지막 랭크에서 자동 퀸으로 승급합니다.
           </p>
         </div>
+      </section>
+
+      <section className="auth-bar" aria-label="Account">
+        <div>
+          <p className="panel-label">플레이어 프로필</p>
+          <AuthSummary
+            authConfigured={authConfigured}
+            authMessage={authMessage}
+            authStatus={authStatus}
+            profile={profile}
+          />
+        </div>
+        <AuthActions
+          authConfigured={authConfigured}
+          authStatus={authStatus}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+        />
       </section>
 
       <section className="game-layout" aria-label="Interactive chess game">
@@ -326,6 +432,60 @@ function App() {
   )
 }
 
+function AuthSummary({ authConfigured, authMessage, authStatus, profile }) {
+  if (!authConfigured) {
+    return (
+      <p className="auth-copy">
+        Supabase 환경변수를 설정하면 Google 로그인을 사용할 수 있습니다.
+      </p>
+    )
+  }
+
+  if (authStatus === 'signed-in' && profile) {
+    return (
+      <div className="profile-row">
+        <div className="avatar" aria-hidden="true">
+          {profile.avatarUrl ? (
+            <img alt="" src={profile.avatarUrl} />
+          ) : (
+            <span>{getInitial(profile.name)}</span>
+          )}
+        </div>
+        <div>
+          <strong>{profile.name}</strong>
+          {profile.email && <span>{profile.email}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  if (authStatus === 'loading') {
+    return <p className="auth-copy">프로필을 확인하는 중입니다.</p>
+  }
+
+  return <p className="auth-copy">{authMessage || 'Google 계정으로 로그인하면 프로필이 표시됩니다.'}</p>
+}
+
+function AuthActions({ authConfigured, authStatus, onLogin, onLogout }) {
+  if (!authConfigured) {
+    return <span className="auth-disabled">설정 필요</span>
+  }
+
+  if (authStatus === 'signed-in') {
+    return (
+      <button className="auth-button secondary" onClick={onLogout} type="button">
+        로그아웃
+      </button>
+    )
+  }
+
+  return (
+    <button className="auth-button" disabled={authStatus === 'loading'} onClick={onLogin} type="button">
+      Google로 로그인
+    </button>
+  )
+}
+
 function getStatusText(game) {
   if (game.status === 'checkmate') return `${capitalize(game.winner)} wins by checkmate`
   if (game.status === 'stalemate') return 'Draw by stalemate'
@@ -351,6 +511,10 @@ function sameSquare(a, b) {
 
 function capitalize(value) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function getInitial(value) {
+  return value?.trim().charAt(0).toUpperCase() || 'P'
 }
 
 export default App
